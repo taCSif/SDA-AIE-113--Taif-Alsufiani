@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "fraud-service"
 version = "0.1.0"
 description = "Raqib Fraud Detection Service (SDA-AIE-113 course project)"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.8.0",
     "pydantic-settings>=2.4.0",
