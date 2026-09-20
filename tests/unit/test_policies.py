@@ -1,17 +1,25 @@
-"""TODO (fast-finisher bonus, per instructor notes):
-Once domain/policies.py::decide() exists, write a parametrized test
-covering the block / review / allow boundaries, e.g.:
+"""Boundary tests for the business policy — no model, no I/O, no fixtures."""
 
-    import pytest
-    from fraud_service.domain.policies import decide
+import pytest
 
-    @pytest.mark.parametrize("prob,expected", [
-        (0.90, "block"),
+from fraud_service.domain.policies import decide
+
+
+@pytest.mark.parametrize(
+    ("probability", "expected"),
+    [
+        (0.99, "block"),
         (0.85, "block"),
-        (0.75, "review"),
+        (0.8499, "review"),
         (0.70, "review"),
-        (0.50, "allow"),
-    ])
-    def test_decide(prob, expected):
-        assert decide(prob) == expected
-"""
+        (0.6999, "allow"),
+        (0.0, "allow"),
+    ],
+)
+def test_decide_default_threshold(probability: float, expected: str) -> None:
+    assert decide(probability) == expected
+
+
+def test_decide_respects_injected_threshold() -> None:
+    assert decide(0.80, block_threshold=0.75) == "block"
+    assert decide(0.80) == "review"

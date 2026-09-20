@@ -1,20 +1,21 @@
-"""Service-layer interfaces (ports). The service depends on THESE, never
-on a concrete ML framework.
+"""Service-layer interfaces (ports).
 
-TODO (Lab 1, step 3):
-Define a `Model` Protocol with one method: `predict_proba(features) -> float`.
-This is what lets you swap sklearn for XGBoost, ONNX or a remote model
-server later by changing exactly one adapter file (see
-INSTRUCTOR_PACKAGE.md, Module 1, section 4).
-
-Suggested shape:
-
-    from typing import Protocol
-
-    class Model(Protocol):
-        model_version: str
-
-        def predict_proba(self, features: dict) -> float: ...
+The service depends on THIS protocol, never on a concrete ML framework.
+Swapping sklearn for XGBoost, ONNX or a remote model server means adding
+a sibling adapter and changing one line in the composition root.
 """
 
-# TODO: implement the Model protocol.
+from __future__ import annotations
+
+from typing import Protocol, runtime_checkable
+
+
+@runtime_checkable
+class Model(Protocol):
+    """Anything that can turn a feature mapping into a fraud probability."""
+
+    model_version: str
+
+    def predict_proba(self, features: dict[str, float | int]) -> float:
+        """Return P(fraud) in [0.0, 1.0]."""
+        ...

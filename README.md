@@ -70,3 +70,5 @@ All checks passed!
 | `ModuleNotFoundError: fraud_service` | Package not installed | `pip install -e .` |
 | Circular import domain ⇄ service | An entity imports the scorer | Dependencies point inward only |
 | Different scores vs notebook | Feature logic drifted during the move | Diff `to_features()` output against notebook Cell 4 for a few sample rows |
+| Notebook scores 100% `allow`, all probabilities `0.0` | `models/fraud_model.joblib` was pickled by a newer scikit-learn than the one installed; `predict_proba` raises `AttributeError: 'LogisticRegression' object has no attribute 'multi_class'`, and SMELL 6 swallows it | Regenerate the artifact against your local sklearn: `python scripts/generate_baseline_assets.py` (deterministic — the CSV comes out byte-identical) |
+| `requires a different Python` on install | `requires-python` floor above your interpreter | The course spec targets Python 3.12+; this checkout is pinned to `>=3.11` to match the lab machine. Raise it once 3.12 is available. |

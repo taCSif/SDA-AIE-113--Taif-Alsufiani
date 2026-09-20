@@ -1,34 +1,40 @@
 """The ONLY file in this service allowed to import sklearn/joblib.
 
-If the team ever moves to ONNX or a remote model server, they add a
-sibling adapter and change one line in the composition root — the
-service layer never notices.
-
-TODO (Lab 1, step 3 — ~15 min):
-Move the `joblib.load(...)` call out of global/import-time scope
-(legacy notebook Cell 2: SMELL 1 & 2) into an explicit, failable
-classmethod called ONLY from the composition root (batch.py here;
-the FastAPI lifespan in Lab 2).
-
-Suggested shape:
-
-    from pathlib import Path
-    import joblib
-    import pandas as pd
-
-    class SklearnModel:
-        def __init__(self, pipeline, model_version: str) -> None:
-            self._pipeline = pipeline
-            self.model_version = model_version
-
-        @classmethod
-        def load(cls, path: str | Path) -> "SklearnModel":
-            bundle = joblib.load(path)          # {"pipeline": ..., "version": "v3.2.0"}
-            return cls(bundle["pipeline"], bundle["version"])
-
-        def predict_proba(self, features: dict) -> float:
-            frame = pd.DataFrame([features])
-            return float(self._pipeline.predict_proba(frame)[0, 1])
+Moves the `joblib.load(...)` call out of import-time global scope
+(legacy notebook Cell 1: SMELL 1 & 2) into an explicit, failable
+classmethod called only from a composition root — batch.py here, the
+FastAPI lifespan in Lab 2.
 """
 
-# TODO: implement SklearnModel.
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import joblib
+import pandas as pd
+
+
+class SklearnModel:
+    """Adapter satisfying `fraud_service.service.interfaces.Model`."""
+
+    def __init__(self, pipeline: Any, model_version: str) -> None:
+        self._pipeline = pipeline
+        self.model_version = model_version
+
+    @classmethod
+    def load(cls, path: str | Path) -> SklearnModel:
+        """Load the artifact bundle: {"pipeline": ..., "version": "v3.2.0"}.
+
+        Fails loudly with an absolute path if the artifact is missing —
+        the notebook's silent `../` fallback hid this class of bug.
+        """
+        artifact_path = Path(path)
+        if not artifact_path.is_file():
+            raise FileNotFoundError(f"Model artifact not found: {artifact_path.resolve()}")
+        artifact = joblib.load(artifact_path)
+        return cls(artifact["pipeline"], artifact.get("version", "unknown"))
+
+    def predict_proba(self, features: dict[str, float | int]) -> float:
+        frame = pd.DataFrame([features])
+        return float(self._pipeline.predict_proba(frame)[0, 1])

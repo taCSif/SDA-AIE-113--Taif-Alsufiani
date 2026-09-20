@@ -1,22 +1,29 @@
-"""Typed, fail-fast configuration. One place to read every environment
-variable — never scatter `os.environ["X"]` across the codebase (that
-was one of the "common mistakes" called out in Module 1).
+"""Typed, fail-fast configuration.
 
-TODO (Lab 1, step 3-4):
-Define a pydantic-settings Settings class with at least: model_path,
-block_threshold. Read configs/settings.example.env for the expected
-variable names (FRAUD_ prefix).
-
-Suggested shape:
-
-    from pydantic_settings import BaseSettings
-
-    class Settings(BaseSettings):
-        model_path: str = "models/fraud_model.joblib"
-        block_threshold: float = 0.85
-
-        class Config:
-            env_prefix = "FRAUD_"
+One place reads the environment — never scatter `os.environ["X"]`
+across the codebase, and never hardcode a relative path mid-module the
+way the notebook did (SMELL 2).
 """
 
-# TODO: implement Settings.
+from __future__ import annotations
+
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Reads FRAUD_-prefixed env vars; see configs/settings.example.env."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="FRAUD_",
+        env_file=".env",
+        extra="ignore",
+        protected_namespaces=(),
+    )
+
+    model_path: Path = Path("models/fraud_model.joblib")
+    data_path: Path = Path("data/transactions_sample.csv")
+    output_path: Path = Path("scored.csv")
+    block_threshold: float = 0.85
+    log_level: str = "INFO"
