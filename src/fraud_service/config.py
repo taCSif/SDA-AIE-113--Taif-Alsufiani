@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     model_path: str = "models/fraud_model.joblib"
     block_threshold: float = 0.85
     log_level: str = "INFO"
+    # Debug-only crash endpoint (/v1/boom) used for the stack-trace-leak
+    # drill in Lab 2b. Must stay false outside local experiments.
+    enable_debug_endpoints: bool = False
 
 
 settings = Settings()

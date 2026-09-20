@@ -71,3 +71,90 @@ $ curl -s localhost:8000/v1/predict -d '{"transaction_id":"TXN-2026-00042","amou
 | `/ready` returns 200 before the model is actually loaded | `app.state.scorer` set before warm-up completes | Set it only AFTER the warm-up `predict_proba` call in `lifespan` |
 | 422 on a request that looks valid | `extra="forbid"` + a typo'd field name | Read the 422 body — it names the exact field. This is the feature working, not a bug |
 | First request ~1s, rest fast | Warm-up isn't running | Check for the `model_loaded` print line at startup |
+
+---
+
+# Lab 2 — the HTTP face (implemented on this branch)
+
+## Endpoints
+
+| method | path | success | failure |
+|---|---|---|---|
+| POST | `/v1/predict` | 200 `PredictResponse` | 422 validation, 503 model not ready, 500 internal |
+| GET | `/v1/health` | 200 always — **liveness**, touches nothing | — |
+| GET | `/v1/ready` | 200 once the model is loaded **and** warmed up | 503 + `Retry-After: 5` |
+
+Every response carries `X-Trace-Id` (echoed from the request if the caller
+supplies one) and `X-Response-Time-Ms`.
+
+## Error envelope — design assumption
+
+The brief allowed RFC 9457 Problem Details (`application/problem+json`) when no
+contract table is available. A contract table *was* available: the suggested
+shape in the starter's `api/schemas.py` docstring. This service therefore
+implements **that** envelope, not RFC 9457:
+
+```json
+{"error": {"code": "VALIDATION_ERROR", "message": "...", "trace_id": "...", "details": [...]}}
+```
+
+- `code` is the stable, machine-readable half of the contract; clients branch on
+  it. `message` is human-readable and may change.
+- `details` is added on 422 and carries pydantic's field-level errors, so the
+  response names the exact offending field.
+- **Every** non-2xx response uses this one envelope — 422, 503 and 500 alike,
+  built in a single place (`_error_response()` in `api/app.py`). If the team
+  later standardises on RFC 9457, that one function is the only thing to change.
+
+## Layer discipline
+
+`PredictRequest` is an HTTP object and `Transaction` is a domain object; they
+meet only in `PredictRequest.to_domain()`, called at the route boundary. The
+domain and service packages import neither FastAPI, sklearn, joblib nor
+pydantic-settings — verified by grep, not by eye:
+
+```bash
+grep -rn "^\s*\(import\|from\)\s\+\(fastapi\|sklearn\|joblib\|pydantic_settings\)"      src/fraud_service/domain src/fraud_service/service --include=*.py   # must be empty
+```
+
+## Why `/v1/predict` is a plain `def`
+
+sklearn inference is blocking CPU work. A plain `def` route runs in FastAPI's
+thread pool; `async def` would run it on the event loop and serialize every
+concurrent request. Measured cost of getting this wrong: **4.3x throughput loss
+(126 -> 29 RPS) and a 9.6x slower liveness probe at concurrency 25** — see
+[BENCHMARKS.md](BENCHMARKS.md) section 5, which also reports the case where the
+trap does *not* show and explains why.
+
+## Running it
+
+```bash
+python -m venv .venv             # isolate: another course repo on this machine
+.\.venv\Scripts\Activate.ps1     # can otherwise capture `import fraud_service`
+pip install -e ".[dev,api]"      # src-layout: the package must be installed
+make serve                       # fastapi dev -> http://127.0.0.1:8000/docs
+make test                        # 15 tests
+make lint
+```
+
+The deliberate crash endpoint used for the stack-trace-leak drill is off unless
+you ask for it, and must never be enabled in a deployment:
+
+```bash
+FRAUD_ENABLE_DEBUG_ENDPOINTS=true python -m uvicorn fraud_service.api.app:app --port 8000
+curl -i localhost:8000/v1/boom   # 500 envelope + trace_id; traceback stays in the log
+```
+
+## Environment note (Windows)
+
+`models/fraud_model.joblib` is pickled by scikit-learn 1.8.0. With 1.7.2
+installed, the warm-up raises `AttributeError: 'LogisticRegression' object has
+no attribute 'multi_class'` and startup fails. Fixed here by installing the
+matching version, which keeps the instructor's artifact byte-identical:
+
+```bash
+pip install "scikit-learn==1.8.0"
+```
+
+Regenerating the artifact with `python scripts/generate_baseline_assets.py` also
+works, but it rewrites a committed file, so it was avoided.
