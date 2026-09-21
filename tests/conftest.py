@@ -1,19 +1,42 @@
-"""TODO (Lab 4, Step 1 — ~10 min):
-Fixtures shared by every test in this suite.
+"""Fixtures shared by every test in this suite."""
+import pytest
+from fastapi.testclient import TestClient
 
-Write:
-- ConstantModel — a test double standing in for sklearn (implements
-  the same Model protocol as SklearnModel: just predict_proba).
-- client_factory — builds a FastAPI app with the /predict scorer
-  dependency overridden to inject a ConstantModel at whatever
-  probability the test wants.
-- real_model — loads the REAL model from disk exactly once for the
-  whole test session (scope="session" — this is the single most
-  important line in this file; without it, the behavioural suite
-  reloads the model from disk on every test).
-- sample_txn — a ready-made valid Transaction for tests to reuse.
+from fraud_service.api.app import create_app
+from fraud_service.api.routes import get_scorer
+from fraud_service.domain.entities import Transaction
+from fraud_service.service.scorer import FraudScorer
 
-See the Day 2 Lab Guide, Lab 4 Step 1, for the full suggested shape.
-"""
 
-# TODO: implement ConstantModel, client_factory, real_model, sample_txn.
+class ConstantModel:
+    """Test double standing in for sklearn — drives every decision branch."""
+
+    def __init__(self, probability, version="test-1"):
+        self._p = probability
+        self.model_version = version
+
+    def predict_proba(self, features: dict) -> float:
+        return self._p
+
+
+@pytest.fixture
+def client_factory():
+    def _make(probability=0.10, threshold=0.85):
+        app = create_app()
+        scorer = FraudScorer(model=ConstantModel(probability),
+                             block_threshold=threshold)
+        app.dependency_overrides[get_scorer] = lambda: scorer
+        return TestClient(app, raise_server_exceptions=False)
+    return _make
+
+
+@pytest.fixture(scope="session")
+def real_model():
+    from fraud_service.adapters.sklearn_model import SklearnModel
+    return SklearnModel.load("models/fraud_model.joblib")
+
+
+@pytest.fixture
+def sample_txn():
+    return Transaction(transaction_id="TXN-TEST-00001",
+                       amount_sar=500.0, is_night=0)
