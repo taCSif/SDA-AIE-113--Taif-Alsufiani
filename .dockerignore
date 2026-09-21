@@ -1,0 +1,29 @@
+# Build context exclusions. Docker sends everything NOT listed here to the
+# daemon, so every entry below is both a speed win and a safety boundary.
+
+# --- VCS and local tooling ---------------------------------------------
+.git
+.github/
+.venv
+
+# --- Python build/run droppings ----------------------------------------
+__pycache__/
+*.pyc
+.pytest_cache
+.ruff_cache
+build/
+*.egg-info/
+
+# --- Not needed by the runtime image -----------------------------------
+tests/
+data/
+notebooks/
+
+# CRITICAL: secrets must never enter the build context.
+# A COPY . . would otherwise bake .env into an image layer forever —
+# `docker history` and any `docker save` would expose it.
+.env
+
+# --- Docs: keep README.md only -----------------------------------------
+*.md
+!README.md
