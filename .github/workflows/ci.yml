@@ -86,3 +86,29 @@ jobs:
                           assert 0<=b['fraud_probability']<=1; \
                           assert b['model_version']; print('smoke OK')"
           docker logs svc --tail 5
+
+  publish:                      # delivery: only on main, never PRs
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [image-smoke]
+    permissions:
+      contents: read
+      packages: write            # scoped token for GHCR push, no PAT
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lowercase the image ref (GHCR rejects uppercase)
+        run: echo "IMAGE=$(echo '${{ env.IMAGE }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push (SHA + channel tag)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:main
