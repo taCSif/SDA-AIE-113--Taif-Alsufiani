@@ -61,6 +61,8 @@ jobs:
     needs: [lint, test]         # gated by the cheap checks
     steps:
       - uses: actions/checkout@v4
+      - name: Lowercase the image ref (GHCR rejects uppercase)
+        run: echo "IMAGE=$(echo '${{ env.IMAGE }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@v3
       - name: Build with GHA layer cache
         uses: docker/build-push-action@v6
