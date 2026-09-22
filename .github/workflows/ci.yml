@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  pull_request:                # gates every PR
+  push:
+    branches: [main]           # main also builds + publishes
+  workflow_dispatch:           # manual demo / hotfix runs
+
+permissions:
+  contents: read                # least privilege default
+
+concurrency:
+  group: ci-${{ github.ref }}   # cancel superseded runs
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  lint:                         # cheapest gate first
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - run: pip install -e ".[dev,api]" mypy import-linter
+      - name: Ruff (style + import layer rules)
+        run: ruff check src tests
+      - name: Import-linter (architecture contract)
+        run: lint-imports
+      - name: Mypy (type-check the seams)
+        run: mypy src/fraud_service --strict
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - run: pip install -e ".[dev,api]"
+      - name: Fast suite — the per-commit gate
+        run: pytest -m "not slow" --cov-fail-under=80
+      - name: Behavioural gate — real model artefact
+        run: pytest -m "behavioural and not slow" -q
+      - name: Upload coverage (evidence, even on fail)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: .coverage
