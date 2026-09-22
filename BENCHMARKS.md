@@ -43,17 +43,23 @@ Image ships as a non-root `appuser`, healthcheck on `/v1/ready`,
 | Branch coverage (domain + service + api) | ~99% (target ≥ 80%) |
 | Malformed corpus | 40/40 rejected with 4xx |
 
-## Day 3 — Lab 5 (CI/CD pipeline)
-
-_Fill in as you complete each step — reference numbers from the course:_
+## Day 3 — Lab 5 (CI/CD pipeline) — done
 
 | Metric | Value |
 |---|---|
-| lint job duration | |
-| test job duration | |
-| image-smoke — cold run | ~5 min 40 s (reference) |
-| image-smoke — warm run (GHA cache) | ~1 min 02 s (reference) |
-| bad-pr blocked by branch protection? | yes / no |
+| lint job duration | ~40 s |
+| test job duration | ~48 s |
+| image-smoke — cold run | 1 min 49 s |
+| image-smoke — warm run (GHA cache) | 30 s (~3.6x faster) |
+| bad-pr: blocked by branch protection? | yes — `lint` (import-linter) and `test` (boundary case) both failed, merge button stayed greyed out until fixed |
+
+Two real bugs the pipeline itself surfaced on first push, fixed via
+[github.com/taCSif/SDA-AIE-113--Taif-Alsufiani](https://github.com/taCSif/SDA-AIE-113--Taif-Alsufiani):
+`lint-imports` had no `[tool.importlinter]` config to read yet, and
+`pytest -m "behavioural and not slow"` always selects zero tests in
+this repo's suite (every behavioural test in Lab 4 is also marked
+`slow`), which silently tripped the global `--cov-fail-under=80`
+instead of testing anything.
 
 ## Day 3 — Lab 6 (Config, Secrets & Logs)
 
