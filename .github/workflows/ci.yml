@@ -48,7 +48,7 @@ jobs:
       - name: Fast suite — the per-commit gate
         run: pytest -m "not slow" --cov-fail-under=80
       - name: Behavioural gate — real model artefact
-        run: pytest -m "behavioural and not slow" -q
+        run: pytest -m behavioural -q --no-cov
       - name: Upload coverage (evidence, even on fail)
         if: always()
         uses: actions/upload-artifact@v4
