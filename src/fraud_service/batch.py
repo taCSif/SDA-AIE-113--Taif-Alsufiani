@@ -13,16 +13,20 @@ import pandas as pd
 from fraud_service.adapters.sklearn_model import SklearnModel
 from fraud_service.config import Settings
 from fraud_service.domain.entities import Transaction
+from fraud_service.logging_setup import configure_logging, get_logger
 from fraud_service.service.scorer import FraudScorer
+
+log = get_logger(__name__)
 
 
 def main() -> None:
     settings = Settings()
+    configure_logging(settings.log_level)
 
     t0 = time.perf_counter()
     model = SklearnModel.load(settings.model_path)
     load_duration = time.perf_counter() - t0
-    print(f"Loaded model version {model.model_version} in {load_duration:.2f}s")
+    log.info("model_loaded", version=model.model_version, seconds=round(load_duration, 2))
 
     scorer = FraudScorer(model=model, block_threshold=settings.block_threshold)
 
@@ -42,9 +46,9 @@ def main() -> None:
     out_df = pd.DataFrame(results)
     out_df.to_csv("scored.csv", index=False)
 
-    counts = out_df["decision"].value_counts().to_dict()
-    print(f"Scored {len(out_df)} transactions in {batch_duration:.2f}s -> scored.csv")
-    print(f"Summary: {counts}")
+    counts = {str(k): v for k, v in out_df["decision"].value_counts().to_dict().items()}
+    log.info("batch_scored", rows=len(out_df), seconds=round(batch_duration, 2),
+              output="scored.csv", **counts)
 
 
 if __name__ == "__main__":

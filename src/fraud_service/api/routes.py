@@ -6,14 +6,17 @@ thread pool. `async def` here blocks the event loop for every other
 request — this is the #1 cause of "FastAPI is slow" complaints, and
 the trap planted in this lab.
 """
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from fraud_service.api.schemas import HealthResponse, PredictRequest, PredictResponse
+from fraud_service.logging_setup import get_logger
 from fraud_service.service.scorer import FraudScorer
 
 router = APIRouter()
+log = get_logger(__name__)
 
 
 def get_scorer(request: Request) -> FraudScorer:
@@ -27,7 +30,17 @@ def get_scorer(request: Request) -> FraudScorer:
 @router.post("/predict", response_model=PredictResponse)
 def predict(body: PredictRequest, request: Request,
             scorer: FraudScorer = Depends(get_scorer)) -> PredictResponse:  # noqa: B008
+    t0 = time.perf_counter()
     result = scorer.score(body.to_domain())
+    latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+    log.info(
+        "prediction_served",
+        transaction_id=result["transaction_id"],
+        decision=result["decision"],
+        fraud_probability=round(result["probability"], 6),
+        model_version=result["model_version"],
+        latency_ms=latency_ms,
+    )
     return PredictResponse(
         transaction_id=result["transaction_id"],
         fraud_probability=round(result["probability"], 6),
